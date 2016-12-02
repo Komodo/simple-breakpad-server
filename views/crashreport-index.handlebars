@@ -5,26 +5,22 @@
 <table class="table">
 
   <tr>
-    <th>Stackwalk</th>
     {{#each fields}}
       <th>{{titleCase this}}</th>
     {{/each}}
+    <th></th>
   </tr>
 
   {{#each records}}
     <tr>
+    {{#each this.props}}
+      <td>
+        {{this}}
+      </td>
+    {{/each}}
       <td>
         <a href="{{reportUrl this.id}}">view</a>
       </td>
-    {{#each this.props}}
-      <td>
-        {{#if this.path}}
-          <a href="{{this.path}}">download</a>
-        {{else}}
-        {{this}}
-        {{/if}}
-      </td>
-    {{/each}}
     </tr>
   {{/each}}
 </table>

@@ -19,6 +19,10 @@ schema =
     primaryKey: yes
   product: Sequelize.STRING
   version: Sequelize.STRING
+  Platform: Sequelize.STRING
+  PlatformVersion: Sequelize.STRING
+  Reason: Sequelize.STRING
+  StackStart: Sequelize.STRING
   upload_file_minidump: Sequelize.BLOB
 
 
@@ -43,6 +47,16 @@ Crashreport.getStackTrace = (record, callback) ->
     minidump.walkStack tmpfile.name, [symbolsPath], (err, report) ->
       tmpfile.removeCallback()
       cache.set record.id, report unless err?
+      callback err, report
+  .catch (err) ->
+    tmpfile.removeCallback()
+    callback err
+
+Crashreport.getStackTraceRaw = (data, callback) ->
+  tmpfile = tmp.fileSync()
+  fs.writeFile(tmpfile.name, data).then ->
+    minidump.walkStack tmpfile.name, [symbolsPath], (err, report) ->
+      tmpfile.removeCallback()
       callback err, report
   .catch (err) ->
     tmpfile.removeCallback()

@@ -14,6 +14,82 @@ titleCase = require 'title-case'
 busboy = require 'connect-busboy'
 streamToArray = require 'stream-to-array'
 Sequelize = require 'sequelize'
+request = require('request')
+
+bugsnagReport = (props, stack) ->
+
+  summary = props.FramePoisonBase + " :: " + props.PyxpcomMethod
+  if props.StackStart
+    summary = props.StackStart
+
+  exceptions = [];
+  exceptions.push({errorClass: props.Reason || "Crash", message: summary, stacktrace: []})
+
+  if props.StackStart
+    thread0 = stack.match(/Thread 0([\s\S]*?)Thread 1/)
+    if (thread0)
+      bits = thread0[1].split(/\s\d+\s\s/)
+
+      for x of bits
+        bit = bits[x]
+        exceptions[0].stacktrace.push({ file: bit.split("\n")[0], lineNumber: 0, columnNumber: 0, method: "", code: bit })
+
+  payload = {
+    apiKey: config.get('bugsnagApiKey'),
+    notifier: {
+      name: "Komodo-Crash",
+      version: "1.0"
+    },
+    events: [{
+        payloadVersion: "2",
+        context: summary,
+        app: {
+          type: props.product,
+          version: props.version,
+          build: props.BuildID,
+          releaseStage: props.Platform + " - " + props.ReleaseChannel
+        },
+        device: {
+          platform: props.Platform || "Unknown",
+          release: props.PlatformVersion || ""
+        },
+        metaData: {
+          state: {
+            Notes: props.Notes
+            InstallTime: props.InstallTime
+            StartupTime: props.StartupTime
+            CrashTime: props.CrashTime
+            SecondsSinceLastCrash: props.SecondsSinceLastCrash
+            AdapterVendorID: props.AdapterVendorID
+            AdapterDeviceID: props.AdapterDeviceID
+            AdapterDrive: props.AdapterDrive
+            FramePoisonBase: props.FramePoisonBase
+            FramePoisonSize: props.FramePoisonSize
+            PyxpcomMethod: props.PyxpcomMethod
+            Comments: props.Comments
+          }
+        },
+        exceptions: exceptions,
+        user: {
+          email: props.Email || ""
+        }
+      }
+    ]
+  }
+
+  opts = {
+    method: "post",
+    url: "https://notify.bugsnag.com",
+    json: true,
+    body: payload
+  }
+  request opts, (err, httpResponse, body) ->
+    if (err)
+      console.log(err)
+    else
+      console.log("Bugsnag Notified")
+      console.log(body)
+
 
 crashreportToApiJson = (crashreport) ->
   json = crashreport.toJSON()
@@ -24,14 +100,15 @@ crashreportToApiJson = (crashreport) ->
 
   json
 
-crashreportToViewJson = (report) ->
+crashreportToViewJson = (report, limited) ->
   hidden = ['id', 'updated_at']
+  shown = config.get('customFields').listedParams
   fields =
     id: report.id
     props: {}
 
   for name, value of Crashreport.attributes
-    if value.type instanceof Sequelize.BLOB
+    if value.type instanceof Sequelize.BLOB and not limited
       fields.props[name] = { path: "/crashreports/#{report.id}/files/#{name}" }
 
   json = report.toJSON()
@@ -40,13 +117,17 @@ crashreportToViewJson = (report) ->
       # pass
     else if Buffer.isBuffer(json[k])
       # already handled
-    else if k == 'created_at'
+    else if k == 'created_at' and not limited
       # change the name of this key for display purposes
       fields.props['created'] = moment(v).fromNow()
-    else if v instanceof Date
+    else if v instanceof Date and not limited
       fields.props[k] = moment(v).fromNow()
     else
-      fields.props[k] = if v? then v else 'not present'
+      if limited
+        if k in shown
+          fields.props[k] = if v? then v else 'not present'
+      else
+        fields.props[k] = if v? then v else 'not present'
 
   return fields
 
@@ -134,20 +215,45 @@ run = ->
         return Buffer.concat(buffers)
       ).then (buffer) ->
         if fieldname of Crashreport.attributes
+          console.log(fieldname)
           props[fieldname] = buffer
 
     req.busboy.on 'field', (fieldname, val, fieldnameTruncated, valTruncated) ->
-      if fieldname == 'prod'
+      if fieldname == 'ProductName'
         props['product'] = val
-      else if fieldname == 'ver'
+      else if fieldname == 'Version'
         props['version'] = val
       else if fieldname of Crashreport.attributes
         props[fieldname] = val.toString()
 
     req.busboy.on 'finish', ->
       Promise.all(streamOps).then ->
-        Crashreport.create(props).then (report) ->
-          res.json(crashreportToApiJson(report))
+
+        Crashreport.getStackTraceRaw props.upload_file_minidump, (err, stackwalk) ->
+          return next err if err?
+
+          stackwalk = stackwalk.toString('utf8')
+          dump = stackwalk.substr(0,500)
+          
+          platform = dump.match(/Operating system:\s([\s\S]*?)\s[A-Z]+:/)
+          if (platform)
+            [platform, version] = platform[1].split("\n")
+            props.Platform = platform.trim()
+            props.PlatformVersion = version.trim()
+
+          reason = dump.match(/Crash reason:\s+(.*?)\n/)
+          if (reason)
+            props.Reason = reason[1]
+
+          stackStart = dump.match(/Thread .*?\n[\s\d]+(.*?)\n/)
+          if (stackStart)
+              props.StackStart = stackStart[1]
+              
+          bugsnagReport props, stackwalk
+  
+          Crashreport.create(props).then (report) ->
+            res.json(crashreportToApiJson(report))
+            
       .catch (err) ->
         next err
 
@@ -180,7 +286,9 @@ run = ->
       count = q.count
       pageCount = Math.ceil(count / limit)
 
-      viewReports = records.map(crashreportToViewJson)
+      viewReports = []
+      for x of records
+        viewReports.push(crashreportToViewJson(records[x], true))
 
       fields =
         if viewReports.length
