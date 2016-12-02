@@ -22,7 +22,7 @@ bugsnagReport = (props, stack) ->
   if props.StackStart
     summary = props.StackStart
 
-  exceptions = [];
+  exceptions = []
   exceptions.push({errorClass: props.Reason || "Crash", message: summary, stacktrace: []})
 
   if props.StackStart
@@ -247,7 +247,7 @@ run = ->
 
           stackStart = dump.match(/Thread .*?\n[\s\d]+(.*?)\n/)
           if (stackStart)
-              props.StackStart = stackStart[1]
+            props.StackStart = stackStart[1]
               
           bugsnagReport props, stackwalk
   
