@@ -14,7 +14,10 @@ titleCase = require 'title-case'
 busboy = require 'connect-busboy'
 streamToArray = require 'stream-to-array'
 Sequelize = require 'sequelize'
-request = require('request')
+request = require 'request'
+#https = require 'https'
+fs = require 'fs'
+ipfilter = require('express-ipfilter').IpFilter
 
 bugsnagReport = (props, stack) ->
 
@@ -166,6 +169,8 @@ run = ->
   app = express()
   breakpad = express()
 
+  app.use(ipfilter(config.get("ipWhitelist"), {mode: 'allow', excluding: ['/crashreports/submit'], allowedHeaders: [] }))
+
   hbs = exphbs.create
     defaultLayout: 'main'
     partialsDir: path.resolve(__dirname, '..', 'views')
@@ -201,7 +206,7 @@ run = ->
     res.status(500).send "Bad things happened:<br/> #{err.message || err}"
 
   breakpad.use(busboy())
-  breakpad.post '/crashreports', (req, res, next) ->
+  breakpad.post '/crashreports/submit', (req, res, next) ->
     props = {}
     streamOps = []
 
@@ -402,5 +407,10 @@ run = ->
       delete symfileJson.contents
       res.json symfileJson
 
-  app.listen port
+  #options = {
+  #  key: fs.readFileSync(config.get('sslKeyFile')),
+  #  cert: fs.readFileSync(config.get('sslCertFile'))
+  #}
+  #https.createServer(options, app).listen(port)
+  app.listen(80)
   console.log "Listening on port #{port}"
