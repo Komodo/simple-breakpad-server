@@ -8,7 +8,6 @@ exphbs = require 'express-handlebars'
 hbsPaginate = require 'handlebars-paginate'
 paginate = require 'express-paginate'
 Crashreport = require './model/crashreport'
-Symfile = require './model/symfile'
 db = require './model/db'
 titleCase = require 'title-case'
 busboy = require 'connect-busboy'
@@ -16,8 +15,9 @@ streamToArray = require 'stream-to-array'
 Sequelize = require 'sequelize'
 request = require 'request'
 #https = require 'https'
-fs = require 'fs'
+#fs = require 'fs'
 ipfilter = require('express-ipfilter').IpFilter
+fs = require 'fs-promise'
 
 bugsnagReport = (props, stack) ->
 
@@ -134,33 +134,10 @@ crashreportToViewJson = (report, limited) ->
 
   return fields
 
-symfileToViewJson = (symfile) ->
-  hidden = ['id', 'updated_at', 'contents']
-  fields =
-    id: symfile.id
-    contents: symfile.contents
-    props: {}
-
-  json = symfile.toJSON()
-
-  for k,v of json
-    if k in hidden
-      # pass
-    else if k == 'created_at'
-      # change the name of this key for display purposes
-      fields.props['created'] = moment(v).fromNow()
-    else if v instanceof Date
-      fields.props[k] = moment(v).fromNow()
-    else
-      fields.props[k] = if v? then v else 'not present'
-
-  return fields
-
 # initialization: init db and write all symfiles to disk
 db.sync()
   .then ->
-    Symfile.findAll().then (symfiles) ->
-      Promise.all(symfiles.map((s) -> Symfile.saveToDisk(s))).then(run)
+    run()
   .catch (err) ->
     console.error err.stack
     process.exit 1
@@ -178,7 +155,6 @@ run = ->
     helpers:
       paginate: hbsPaginate
       reportUrl: (id) -> "/crashreports/#{id}"
-      symfileUrl: (id) -> "/symfiles/#{id}"
       titleCase: titleCase
 
   breakpad.set 'json spaces', 2
@@ -312,53 +288,6 @@ run = ->
           pageCount: pageCount
 
   breakpad.use paginate.middleware(10, 50)
-  breakpad.get '/symfiles', (req, res, next) ->
-    limit = req.query.limit
-    offset = req.offset
-    page = req.query.page
-
-    findAllQuery =
-      order: 'created_at DESC'
-      limit: limit
-      offset: offset
-
-    Symfile.findAndCountAll(findAllQuery).then (q) ->
-      records = q.rows
-      count = q.count
-      pageCount = Math.ceil(count / limit)
-
-      viewSymfiles = records.map(symfileToViewJson)
-
-      fields =
-        if viewSymfiles.length
-          Object.keys(viewSymfiles[0].props)
-        else
-          []
-
-      res.render 'symfile-index',
-        title: 'Symfiles'
-        symfilesActive: yes
-        records: viewSymfiles
-        fields: fields
-        pagination:
-          hide: pageCount <= 1
-          page: page
-          pageCount: pageCount
-
-  breakpad.get '/symfiles/:id', (req, res, next) ->
-    Symfile.findById(req.params.id).then (symfile) ->
-      if not symfile?
-        resturn res.send 404, 'Symfile not found'
-
-      if 'raw' of req.query
-        res.set 'content-type', 'text/plain'
-        res.send(symfile.contents.toString())
-        res.end()
-      else
-        res.render 'symfile-view', {
-          title: 'Symfile'
-          symfile: symfileToViewJson(symfile)
-        }
 
   breakpad.get '/crashreports/:id', (req, res, next) ->
     Crashreport.findById(req.params.id).then (report) ->
@@ -401,11 +330,48 @@ run = ->
 
   breakpad.use(busboy())
   breakpad.post '/symfiles', (req, res, next) ->
-    Symfile.createFromRequest req, (err, symfile) ->
-      return next(err) if err?
-      symfileJson = symfile.toJSON()
-      delete symfileJson.contents
-      res.json symfileJson
+    props = {}
+    streamOps = []
+    symbolsPath = config.getSymbolsPath()
+    
+    req.busboy.on 'file', (fieldname, file, filename, encoding, mimetype) ->
+      streamOps.push streamToArray(file).then((parts) ->
+        buffers = []
+        for i in [0 .. parts.length - 1]
+          part = parts[i]
+          buffers.push if part instanceof Buffer then part else new Buffer(part)
+  
+        return Buffer.concat(buffers)
+      ).then (buffer) ->
+        if fieldname == 'symfile'
+          props[fieldname] = buffer.toString()
+  
+    req.busboy.on 'finish', ->
+      Promise.all(streamOps).then ->
+        if not 'symfile' of props
+          res.status 400
+          throw new Error 'Form must include a "symfile" field'
+  
+        contents = props.symfile
+        header = contents.split('\n')[0].split(/\s+/)
+  
+        [dec, os, arch, code, name] = header
+  
+        if dec != 'MODULE'
+          msg = 'Could not parse header (expecting MODULE as first line)'
+          throw new Error msg
+        
+        symfileDir = path.join(symbolsPath, name, code)
+        fs.mkdirs(symfileDir).then ->
+          filePath = path.join(symfileDir, "#{name}.sym")
+          fs.writeFile(filePath, contents)
+          
+        res.json({name: name, dec: dec, os: os, arch: arch, code: code})
+  
+      .catch (err) ->
+        console.log err
+  
+    req.pipe(req.busboy)
 
   #options = {
   #  key: fs.readFileSync(config.get('sslKeyFile')),
