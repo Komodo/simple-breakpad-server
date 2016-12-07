@@ -233,6 +233,12 @@ run = ->
           bugsnagReport props, stackwalk
   
           Crashreport.create(props).then (report) ->
+            json = report.toJSON()
+            data = [];
+            fields = ['product', 'version', 'Platform', 'PlatformVersion', 'Reason', 'StackStart', 'ProductID', 'BuildID', 'ReleaseChannel', 'Notes', 'AdapterVendorID', 'AdapterDeviceID', 'FramePoisonBase', 'FramePoisonSize', 'PyxpcomMethod', 'Email', 'Comments']
+            for field in fields
+              data.push props[field] || ""
+            db.query("INSERT INTO crashreports_search VALUES (?, ?)", { replacements: [report.id, data.join(" | ")] })
             res.json(crashreportToApiJson(report))
             
       .catch (err) ->
