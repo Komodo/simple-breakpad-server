@@ -344,6 +344,10 @@ run = ->
         
         fields["Add-ons"] = fields["Add-ons"].replace(/,/g, ", ")
         fields["Add-ons"] = fields["Add-ons"].replace(/%40/g, "@")
+        
+        fields["InstallTime"] = new Date(parseInt(fields["InstallTime"]) * 1000)
+        fields["StartupTime"] = new Date(parseInt(fields["StartupTime"]) * 1000)
+        fields["CrashTime"] = new Date(parseInt(fields["CrashTime"]) * 1000)
 
         res.render 'crashreport-view', {
           title: 'Crash Report'
