@@ -283,26 +283,50 @@ run = ->
           Object.keys(viewReports[0].props)
         else
           []
+          
+      pageStart = page - 5;
+      if pageStart < 1
+        pageStart = 1
+        
+      pageEnd = pageStart + 10
+      if pageEnd > pageCount
+        pageEnd = pageCount
+      
+      pageNumbers = []
+      pageNumber = pageStart
+      while pageNumber <= pageEnd
+        pageNumbers.push {number: pageNumber, active: pageNumber == page}
+        pageNumber++
 
       res.render 'crashreport-index',
         title: 'Crash Reports'
         crashreportsActive: yes
         records: viewReports
         fields: fields
+        req: req
         pagination:
           hide: pageCount <= 1
           page: page
+          pageNext: page+1
+          pagePrev: page-1
           pageCount: pageCount
-          
+          pageNumbers: pageNumbers
+          pageStart: pageStart
+          pageEnd: pageEnd
+    
+    if (req.query.s or req.query.c)
+        findAllQuery.where = {}
+    
     if req.query.s
-      resultType = 'search'
+      findAllQuery.where.id = {
+        $in: db.literal(
+          "(SELECT id FROM crashreports_search WHERE body MATCH "+SqlString.escape(req.query.s)+")"
+        )
+      }
       
-      findAllQuery.where = {
-        id: {
-          $in: db.literal(
-            "(SELECT id FROM crashreports_search WHERE body MATCH "+SqlString.escape(req.query.s)+")"
-          )
-        }
+    if req.query.c
+      findAllQuery.where.Comments = {
+        $ne: null
       }
   
     Crashreport.findAndCountAll(findAllQuery).then handleResults
