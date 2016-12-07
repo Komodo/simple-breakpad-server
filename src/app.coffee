@@ -357,25 +357,32 @@ run = ->
         }
         
   breakpad.post '/crashreports/:id/email', (req, res, next) ->
-    transporter = nodemailer.createTransport(config.get("email").transport)
-    opts = {
-      from: config.get("email").from
-      subject: req.body.subject
-      text: req.body.message
-    }
-    
-    transporter.sendMail opts, (error, info) ->
-      if error
+    Crashreport.findById(req.params.id).then (report) ->
+      if not report?
+        return res.send 404, 'Crash report not found'
+      
+      fields = crashreportToViewJson(report).props
+      
+      transporter = nodemailer.createTransport(config.get("email").transport)
+      opts = {
+        from: config.get("email").from
+        to: fields.Email
+        subject: req.body.subject
+        text: req.body.message
+      }
+      
+      transporter.sendMail opts, (error, info) ->
+        if error
+          res.render 'confirmation',
+            title: 'Error'
+            message: 'Error: ' + error
+          return console.log error
+        
         res.render 'confirmation',
-          title: 'Error'
-          message: 'Error: ' + error
-        return console.log error
-      
-      res.render 'confirmation',
-        title: 'Message sent'
-        message: 'Message sent: ' + info.response
-      
-      console.log 'Message sent: ' + info.response
+          title: 'Message sent'
+          message: 'Message sent: ' + info.response
+        
+        console.log 'Message sent: ' + info.response
 
   breakpad.get '/crashreports/:id/stackwalk', (req, res, next) ->
     # give the raw stackwalk
