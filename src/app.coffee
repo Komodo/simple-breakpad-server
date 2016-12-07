@@ -284,7 +284,7 @@ run = ->
         else
           []
           
-      pageStart = page - 5;
+      pageStart = page - 5
       if pageStart < 1
         pageStart = 1
         
@@ -315,7 +315,7 @@ run = ->
           pageEnd: pageEnd
     
     if (req.query.s or req.query.c)
-        findAllQuery.where = {}
+      findAllQuery.where = {}
     
     if req.query.s
       findAllQuery.where.id = {
