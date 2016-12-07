@@ -4,10 +4,22 @@
         <meta charset="utf-8">
         <title>{{title}}</title>
         <link rel="stylesheet" type="text/css" href="/assets/css/bootstrap.css">
+        <style type="text/css">
+            dd
+            {
+                overflow: auto;
+                max-height: 75px;
+            }
+        </style>
         <meta name="viewport" content="width=device-width, initial-scale=1">
     </head>
     <body>
       <div class="container-fluid">
+        {{#if crashreportsActive}}
+        {{else}}
+        <a href="/" class="btn btn-default" style="margin: 10px 0 0">Back to Crash Reports</a>
+        {{/if}}
+        
         {{{body}}}
       </div>
     </body>

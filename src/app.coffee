@@ -19,6 +19,7 @@ request = require 'request'
 ipfilter = require('express-ipfilter').IpFilter
 fs = require 'fs-promise'
 SqlString = require 'sqlstring'
+nodemailer = require 'nodemailer'
 
 bugsnagReport = (props, stack) ->
 
@@ -340,14 +341,41 @@ run = ->
       Crashreport.getStackTrace report, (err, stackwalk) ->
         return next err if err?
         fields = crashreportToViewJson(report).props
+        
+        fields["Add-ons"] = fields["Add-ons"].replace(/,/g, ", ")
+        fields["Add-ons"] = fields["Add-ons"].replace(/%40/g, "@")
 
         res.render 'crashreport-view', {
           title: 'Crash Report'
           stackwalk: stackwalk
           product: fields.product
           version: fields.version
+          Email: fields.Email
+          emailTemplate: config.get("email").template
           fields: fields
+          id: req.params.id
         }
+        
+  breakpad.post '/crashreports/:id/email', (req, res, next) ->
+    transporter = nodemailer.createTransport(config.get("email").transport)
+    opts = {
+      from: config.get("email").from
+      subject: req.body.subject
+      text: req.body.message
+    }
+    
+    transporter.sendMail opts, (error, info) ->
+      if error
+        res.render 'confirmation',
+          title: 'Error'
+          message: 'Error: ' + error
+        return console.log error
+      
+      res.render 'confirmation',
+        title: 'Message sent'
+        message: 'Message sent: ' + info.response
+      
+      console.log 'Message sent: ' + info.response
 
   breakpad.get '/crashreports/:id/stackwalk', (req, res, next) ->
     # give the raw stackwalk
