@@ -18,6 +18,7 @@ request = require 'request'
 #fs = require 'fs'
 ipfilter = require('express-ipfilter').IpFilter
 fs = require 'fs-promise'
+SqlString = require 'sqlstring'
 
 bugsnagReport = (props, stack) ->
 
@@ -196,7 +197,6 @@ run = ->
         return Buffer.concat(buffers)
       ).then (buffer) ->
         if fieldname of Crashreport.attributes
-          console.log(fieldname)
           props[fieldname] = buffer
 
     req.busboy.on 'field', (fieldname, val, fieldnameTruncated, valTruncated) ->
@@ -261,10 +261,11 @@ run = ->
       limit: limit
       offset: offset
       attributes: attributes
-
-    Crashreport.findAndCountAll(findAllQuery).then (q) ->
+      
+    handleResults = (q) ->
       records = q.rows
       count = q.count
+        
       pageCount = Math.ceil(count / limit)
 
       viewReports = []
@@ -286,6 +287,19 @@ run = ->
           hide: pageCount <= 1
           page: page
           pageCount: pageCount
+          
+    if req.query.s
+      resultType = 'search'
+      
+      findAllQuery.where = {
+        id: {
+          $in: db.literal(
+            "(SELECT id FROM crashreports_search WHERE body MATCH "+SqlString.escape(req.query.s)+")"
+          )
+        }
+      }
+  
+    Crashreport.findAndCountAll(findAllQuery).then handleResults
 
   breakpad.use paginate.middleware(10, 50)
 
@@ -378,5 +392,5 @@ run = ->
   #  cert: fs.readFileSync(config.get('sslCertFile'))
   #}
   #https.createServer(options, app).listen(port)
-  app.listen(80)
+  app.listen(port)
   console.log "Listening on port #{port}"
