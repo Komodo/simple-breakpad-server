@@ -27,7 +27,8 @@
       </div>
       <div class="form-group">
         <label for="message">Message</label>
-        <textarea class="form-control" id="message" name="message" rows="20">{{emailTemplate}}
+        <textarea class="form-control" id="message" name="message" rows="20">{{#if Comments}}{{Comments}}
+{{/if}}{{emailTemplate}}
 (Crash ID: {{id}})</textarea>
       </div>
       

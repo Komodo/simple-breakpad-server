@@ -354,7 +354,8 @@ run = ->
           stackwalk: stackwalk
           product: fields.product
           version: fields.version
-          Email: fields.Email
+          Email: if fields.Email == "not present" then "" else fields.Email
+          Comments: if fields.Comments == "not present" then "" else "> " + fields.Comments.replace(/\n/g, "\n> ")
           emailTemplate: config.get("email").template
           fields: fields
           id: req.params.id
