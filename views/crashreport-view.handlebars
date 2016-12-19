@@ -20,6 +20,10 @@
     {{#if Email}}
       <h3>Contact {{Email}}</h3>
       
+      {{#if Contacted}}
+      <h2>Warning: Already Contacted</h2>
+      {{/if}}
+      
       <form method="POST" action="/crashreports/{{id}}/email">
       <div class="form-group">
         <label for="subject">Subject</label>

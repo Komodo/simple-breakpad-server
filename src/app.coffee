@@ -348,7 +348,7 @@ run = ->
         fields["InstallTime"] = new Date(parseInt(fields["InstallTime"]) * 1000)
         fields["StartupTime"] = new Date(parseInt(fields["StartupTime"]) * 1000)
         fields["CrashTime"] = new Date(parseInt(fields["CrashTime"]) * 1000)
-
+        
         res.render 'crashreport-view', {
           title: 'Crash Report'
           stackwalk: stackwalk
@@ -356,6 +356,7 @@ run = ->
           version: fields.version
           Email: if fields.Email == "not present" then "" else fields.Email
           Comments: if fields.Comments == "not present" then "" else "> " + fields.Comments.replace(/\n/g, "\n> ")
+          Contacted: if fields.Contacted == "not present" then false else true
           emailTemplate: config.get("email").template
           fields: fields
           id: req.params.id
@@ -382,6 +383,9 @@ run = ->
             title: 'Error'
             message: 'Error: ' + error
           return console.log error
+        
+        report.set("Contacted", 1)
+        report.save()
         
         res.render 'confirmation',
           title: 'Message sent'

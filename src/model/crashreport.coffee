@@ -23,6 +23,7 @@ schema =
   PlatformVersion: Sequelize.STRING
   Reason: Sequelize.STRING
   StackStart: Sequelize.STRING
+  Contacted: Sequelize.INTEGER
   upload_file_minidump: Sequelize.BLOB
 
 
