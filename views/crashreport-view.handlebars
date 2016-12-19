@@ -1,3 +1,8 @@
+{{#if crashreportsActive}}
+{{else}}
+<a href="javascript:history.go(-1)" class="btn btn-default" style="margin: 10px 0 0">Back to Crash Reports</a>
+{{/if}}
+
 <div class="page-header">
   <h1>Crash Report <small>{{product}} v{{version}}</small></h1>
 </div>
