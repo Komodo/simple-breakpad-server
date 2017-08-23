@@ -29,7 +29,9 @@ schema =
 
 options =
   indexes: [
-    { fields: ['created_at'] }
+    { fields: ['created_at'] },
+    { fields: ['Comments'] },
+    { fields: ['id', 'Comments'] }
   ]
 
 for field in (customFields.params || [])
